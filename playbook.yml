@@ -1,0 +1,63 @@
+---
+- hosts: all
+  become: yes
+  tasks:
+    - name: Install nfs-utils.
+      package:
+        name: nfs-utils
+        state: present
+
+    - name: Create nfs server directory
+      file:
+        path: /otus/upload
+        state: directory
+        owner: vagrant
+        group: vagrant
+      when: ansible_hostname == "nfss"
+
+    - name: Create exports file
+      copy:
+        dest: /etc/exports
+        content: /otus/ 192.168.50.11/32(rw,root_squash)
+        owner: root
+        group: root
+        mode: 0644
+      when: ansible_hostname == "nfss"
+
+    - name: Start and enable nfs-server and rpcbind.
+      service:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+      loop:
+        - rpcbind
+        - firewalld
+        - nfs-server
+      when: ansible_hostname == "nfss"
+
+    - name: Enable firewalld rules
+      firewalld:
+        service: "{{ item }}"
+        permanent: true
+        state: enabled
+      loop:
+        - nfs
+        - nfs3
+        - mountd
+        - rpc-bind
+      when: ansible_hostname == "nfss"
+
+    - name: Restart firewalld
+      service:
+        name: firewalld
+        state: restarted
+      when: ansible_hostname == "nfss"
+
+    - name: Mount nfs share on client
+      mount:
+        src: 192.168.50.10:/otus/
+        path: /mnt/
+        opts: rw
+        state: mounted
+        fstype: nfs
+      when: ansible_hostname == "nfsc"
